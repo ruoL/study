@@ -8,7 +8,9 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/hoisie/redis"
 	"io/ioutil"
 	"log"
@@ -19,6 +21,29 @@ import (
 var reg *regexp.Regexp
 var pattern string = `href="http://www.litrin.net/[^\s]*"`
 var urls []string
+
+//数据库连接相关的参数
+var host string = "localhost"
+var port string = "3306"
+var user string = "root"
+var passwd string = "zhangtianqi"
+var database string = "db1"
+
+//连接数据库
+func connect(host, port, user, passwd, database string) *sql.DB {
+	conn := user + ":" + passwd + "@tcp(" + host + ":" + port + ")/" + database + "?charset=utf8"
+	db, err := sql.Open("mysql", conn)
+	CheckError(err)
+	fmt.Println("connection success !")
+	return db
+}
+
+//错误检查
+func CheckError(err error) {
+	if err != nil {
+		log.Fatal(err)
+	}
+}
 
 //根据url获取相应的网页，以字符串的方式返回
 func getBody(url string) string {
@@ -54,12 +79,24 @@ func getUrlFromBody(body string) {
 	}
 }
 
+var index int
+
 //主函数
 func main() {
+	index = 1
+	db := connect(host, port, user, passwd, database)
+	table := "html"
+	sql := "insert into " + table + "(id, body) values(?, ?)"
+	stmt, err := db.Prepare(sql)
+	CheckError(err)
+
+	var num int = 0
+
 	if urls == nil {
 		urls = make([]string, 0, 10)
 		urls = append(urls, "http://www.litrin.net")
 	}
+
 	var client redis.Client
 
 	for j := 0; j < 4; j++ {
@@ -67,6 +104,10 @@ func main() {
 		for i := 0; i < n; i++ {
 			body := getBody(urls[i])
 			client.Set(urls[i], []byte(body))
+			stmt.Exec(num, body)
+			fmt.Printf("%d, %s\n", index, body[:20])
+			index++
+			num++
 			getUrlFromBody(body)
 
 		}
